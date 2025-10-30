@@ -30,16 +30,16 @@ interface Zombie {
   health: number;
 }
 
-const blockColors: Record<BlockType, string> = {
-  grass: '#4ade80',
-  stone: '#64748b',
-  wood: '#92400e',
-  sand: '#fbbf24',
-  dirt: '#78350f',
-  bedrock: '#1a1a1a',
-  leaves: '#22c55e',
-  planks: '#a16207',
-  cobblestone: '#52525b'
+const blockColors: Record<BlockType, { top: string; side: string; bottom: string }> = {
+  grass: { top: '#7cbd3f', side: '#8b7355', bottom: '#7a5c3d' },
+  stone: { top: '#7c7c7c', side: '#6b6b6b', bottom: '#5a5a5a' },
+  wood: { top: '#9d7c4d', side: '#5d4a33', bottom: '#4a3828' },
+  sand: { top: '#e4d29f', side: '#d4c28f', bottom: '#c4b27f' },
+  dirt: { top: '#8b6f47', side: '#7a5e36', bottom: '#694d25' },
+  bedrock: { top: '#2a2a2a', side: '#1a1a1a', bottom: '#0a0a0a' },
+  leaves: { top: '#6ab44a', side: '#5aa43a', bottom: '#4a942a' },
+  planks: { top: '#9d7543', side: '#8d6533', bottom: '#7d5523' },
+  cobblestone: { top: '#828282', side: '#727272', bottom: '#626262' }
 };
 
 const blockEmojis: Record<BlockType, string> = {
@@ -390,17 +390,66 @@ export default function Index() {
           ctx.textAlign = 'center';
           ctx.fillText('🧟', screenX, screenY - size);
         } else if ('type' in entity && typeof entity.type === 'string') {
-          const color = blockColors[entity.type as BlockType];
-          const r = parseInt(color.slice(1, 3), 16);
-          const g = parseInt(color.slice(3, 5), 16);
-          const b = parseInt(color.slice(5, 7), 16);
+          const colors = blockColors[entity.type as BlockType];
+          
+          const parseColor = (hex: string) => ({
+            r: parseInt(hex.slice(1, 3), 16),
+            g: parseInt(hex.slice(3, 5), 16),
+            b: parseInt(hex.slice(5, 7), 16)
+          });
 
-          ctx.fillStyle = `rgba(${r * brightness}, ${g * brightness}, ${b * brightness}, 1)`;
-          ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
+          const topColor = parseColor(colors.top);
+          const sideColor = parseColor(colors.side);
+          const bottomColor = parseColor(colors.bottom);
 
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+          const cubeSize = size;
+          const depth = size * 0.5;
+
+          ctx.fillStyle = `rgb(${topColor.r * brightness}, ${topColor.g * brightness}, ${topColor.b * brightness})`;
+          ctx.beginPath();
+          ctx.moveTo(screenX, screenY - cubeSize / 2);
+          ctx.lineTo(screenX + cubeSize / 2, screenY - cubeSize / 2 - depth / 2);
+          ctx.lineTo(screenX, screenY - cubeSize / 2 - depth);
+          ctx.lineTo(screenX - cubeSize / 2, screenY - cubeSize / 2 - depth / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
           ctx.lineWidth = 1;
-          ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
+          ctx.stroke();
+
+          ctx.fillStyle = `rgb(${sideColor.r * brightness * 0.8}, ${sideColor.g * brightness * 0.8}, ${sideColor.b * brightness * 0.8})`;
+          ctx.beginPath();
+          ctx.moveTo(screenX - cubeSize / 2, screenY - cubeSize / 2 - depth / 2);
+          ctx.lineTo(screenX - cubeSize / 2, screenY + cubeSize / 2 - depth / 2);
+          ctx.lineTo(screenX, screenY + cubeSize / 2);
+          ctx.lineTo(screenX, screenY - cubeSize / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = `rgb(${sideColor.r * brightness * 0.6}, ${sideColor.g * brightness * 0.6}, ${sideColor.b * brightness * 0.6})`;
+          ctx.beginPath();
+          ctx.moveTo(screenX + cubeSize / 2, screenY - cubeSize / 2 - depth / 2);
+          ctx.lineTo(screenX + cubeSize / 2, screenY + cubeSize / 2 - depth / 2);
+          ctx.lineTo(screenX, screenY + cubeSize / 2);
+          ctx.lineTo(screenX, screenY - cubeSize / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          if (entity.type === 'grass') {
+            const grassTop = parseColor('#7cbd3f');
+            ctx.fillStyle = `rgb(${grassTop.r * brightness}, ${grassTop.g * brightness}, ${grassTop.b * brightness})`;
+            ctx.fillRect(screenX - cubeSize / 2 * 0.9, screenY - cubeSize / 2 - depth / 2 - 2, cubeSize * 0.9, 2);
+          }
+
+          if (entity.type === 'wood') {
+            ctx.strokeStyle = `rgba(${topColor.r * 0.5}, ${topColor.g * 0.5}, ${topColor.b * 0.5}, ${brightness})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(screenX, screenY - cubeSize / 2 - depth / 2, cubeSize * 0.15, 0, Math.PI * 2);
+            ctx.stroke();
+          }
         }
       });
 
@@ -544,8 +593,8 @@ export default function Index() {
                       toast.success(`Выбран ${blockEmojis[type]}`);
                     }}
                     style={{
-                      backgroundColor: selectedBlock === type ? blockColors[type] : undefined,
-                      borderColor: blockColors[type],
+                      backgroundColor: selectedBlock === type ? blockColors[type].top : undefined,
+                      borderColor: blockColors[type].side,
                       borderWidth: '2px'
                     }}
                   >
