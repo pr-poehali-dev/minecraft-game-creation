@@ -139,6 +139,11 @@ export default function Home() {
             </DialogTitle>
           </DialogHeader>
 
+          <div className="p-4 bg-red-600/20 border border-red-500 rounded mb-4">
+            <p className="text-red-400 font-bold text-center">⚠️ ОДИНОЧНАЯ ИГРА - СКОРО</p>
+            <p className="text-red-300 text-sm text-center mt-1">Функция находится в разработке</p>
+          </div>
+
           <div className="space-y-4 mt-4">
             <Button 
               className="w-full h-16 text-lg bg-green-600 hover:bg-green-700"
