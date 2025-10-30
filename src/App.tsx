@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navigation from "./components/Navigation";
 import Home from "./pages/Home";
 import Index from "./pages/Index";
+import Multiplayer from "./pages/Multiplayer";
 import CheatClient from "./pages/CheatClient";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
@@ -25,6 +26,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/game" element={<Index />} />
+            <Route path="/multiplayer" element={<Multiplayer />} />
             <Route path="/cheat" element={<CheatClient />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />

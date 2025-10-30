@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 
-type BlockType = 'grass' | 'stone' | 'wood' | 'sand' | 'water' | 'dirt';
+type BlockType = 'grass' | 'stone' | 'wood' | 'sand' | 'dirt' | 'bedrock';
 
 interface Block {
   x: number;
@@ -13,13 +13,21 @@ interface Block {
   type: BlockType;
 }
 
+interface Player {
+  x: number;
+  y: number;
+  z: number;
+  rotY: number;
+  rotX: number;
+}
+
 const blockColors: Record<BlockType, string> = {
   grass: '#4ade80',
   stone: '#64748b',
   wood: '#92400e',
   sand: '#fbbf24',
-  water: '#0ea5e9',
-  dirt: '#78350f'
+  dirt: '#78350f',
+  bedrock: '#1a1a1a'
 };
 
 const blockEmojis: Record<BlockType, string> = {
@@ -27,157 +35,288 @@ const blockEmojis: Record<BlockType, string> = {
   stone: '🪨',
   wood: '🪵',
   sand: '🏖️',
-  water: '💧',
-  dirt: '🟫'
+  dirt: '🟫',
+  bedrock: '⬛'
 };
 
 export default function Index() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<BlockType>('grass');
-  const [rotation, setRotation] = useState({ x: -30, y: 45 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const [player, setPlayer] = useState<Player>({ x: 0, y: 2, z: 5, rotY: 0, rotX: 0 });
+  const [keys, setKeys] = useState<Set<string>>(new Set());
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
 
   useEffect(() => {
     const initialBlocks: Block[] = [];
-    for (let x = -3; x <= 3; x++) {
-      for (let z = -3; z <= 3; z++) {
+    for (let x = -10; x <= 10; x++) {
+      for (let z = -10; z <= 10; z++) {
         initialBlocks.push({ x, y: 0, z, type: 'grass' });
+        if (Math.random() > 0.9) {
+          initialBlocks.push({ x, y: 1, z, type: 'stone' });
+        }
+      }
+    }
+    for (let x = -10; x <= 10; x++) {
+      for (let z = -10; z <= 10; z++) {
+        initialBlocks.push({ x, y: -1, z, type: 'bedrock' });
       }
     }
     setBlocks(initialBlocks);
   }, []);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-  };
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      setKeys(prev => new Set(prev).add(e.key.toLowerCase()));
+    };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
-    setRotation(prev => ({
-      x: Math.max(-90, Math.min(0, prev.x + dy * 0.5)),
-      y: prev.y + dx * 0.5
-    }));
-    setDragStart({ x: e.clientX, y: e.clientY });
-  };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      setKeys(prev => {
+        const newKeys = new Set(prev);
+        newKeys.delete(e.key.toLowerCase());
+        return newKeys;
+      });
+    };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
-  const addBlock = (x: number, y: number, z: number) => {
-    const existingBlock = blocks.find(b => b.x === x && b.y === y && b.z === z);
-    if (!existingBlock) {
-      setBlocks([...blocks, { x, y, z, type: selectedBlock }]);
-      toast.success(`Блок ${blockEmojis[selectedBlock]} добавлен!`);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (keys.size === 0) return;
+
+      setPlayer(prev => {
+        let newX = prev.x;
+        let newZ = prev.z;
+        const speed = 0.1;
+
+        const forward = {
+          x: Math.sin(prev.rotY * Math.PI / 180) * speed,
+          z: Math.cos(prev.rotY * Math.PI / 180) * speed
+        };
+
+        const right = {
+          x: Math.cos(prev.rotY * Math.PI / 180) * speed,
+          z: -Math.sin(prev.rotY * Math.PI / 180) * speed
+        };
+
+        if (keys.has('w')) {
+          newX += forward.x;
+          newZ -= forward.z;
+        }
+        if (keys.has('s')) {
+          newX -= forward.x;
+          newZ += forward.z;
+        }
+        if (keys.has('a')) {
+          newX -= right.x;
+          newZ += right.z;
+        }
+        if (keys.has('d')) {
+          newX += right.x;
+          newZ -= right.z;
+        }
+
+        return { ...prev, x: newX, z: newZ };
+      });
+    }, 16);
+
+    return () => clearInterval(interval);
+  }, [keys]);
+
+  const handleCanvasClick = () => {
+    if (canvasRef.current && !isPointerLocked) {
+      canvasRef.current.requestPointerLock();
     }
   };
 
-  const removeBlock = (x: number, y: number, z: number) => {
-    setBlocks(blocks.filter(b => !(b.x === x && b.y === y && b.z === z)));
+  useEffect(() => {
+    const handlePointerLockChange = () => {
+      setIsPointerLocked(document.pointerLockElement === canvasRef.current);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (document.pointerLockElement === canvasRef.current) {
+        setPlayer(prev => ({
+          ...prev,
+          rotY: prev.rotY + e.movementX * 0.2,
+          rotX: Math.max(-89, Math.min(89, prev.rotX - e.movementY * 0.2))
+        }));
+      }
+    };
+
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const render = () => {
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#90EE90';
+      ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+
+      const visibleBlocks = blocks.map(block => {
+        const dx = block.x - player.x;
+        const dy = block.y - player.y;
+        const dz = block.z - player.z;
+
+        const rotYRad = -player.rotY * Math.PI / 180;
+        const rotXRad = -player.rotX * Math.PI / 180;
+
+        const camX = dx * Math.cos(rotYRad) - dz * Math.sin(rotYRad);
+        const camZ = dx * Math.sin(rotYRad) + dz * Math.cos(rotYRad);
+        const camY = dy * Math.cos(rotXRad) - camZ * Math.sin(rotXRad);
+        const finalZ = dy * Math.sin(rotXRad) + camZ * Math.cos(rotXRad);
+
+        return { block, camX, camY, camZ: finalZ };
+      }).filter(({ camZ }) => camZ > 0.1);
+
+      visibleBlocks.sort((a, b) => b.camZ - a.camZ);
+
+      visibleBlocks.forEach(({ block, camX, camY, camZ }) => {
+        const scale = 400 / camZ;
+        const screenX = canvas.width / 2 + camX * scale;
+        const screenY = canvas.height / 2 - camY * scale;
+        const size = 50 * scale;
+
+        const brightness = Math.max(0.3, 1 - camZ / 20);
+        const color = blockColors[block.type];
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+
+        ctx.fillStyle = `rgba(${r * brightness}, ${g * brightness}, ${b * brightness}, 1)`;
+        ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
+      });
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2;
+      const crosshairSize = 10;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2 - crosshairSize, canvas.height / 2);
+      ctx.lineTo(canvas.width / 2 + crosshairSize, canvas.height / 2);
+      ctx.moveTo(canvas.width / 2, canvas.height / 2 - crosshairSize);
+      ctx.lineTo(canvas.width / 2, canvas.height / 2 + crosshairSize);
+      ctx.stroke();
+    };
+
+    const animationFrame = requestAnimationFrame(function animate() {
+      render();
+      requestAnimationFrame(animate);
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [blocks, player]);
+
+  const placeBlock = () => {
+    const distance = 3;
+    const dirX = Math.sin(player.rotY * Math.PI / 180);
+    const dirZ = -Math.cos(player.rotY * Math.PI / 180);
+    const dirY = Math.sin(player.rotX * Math.PI / 180);
+
+    const targetX = Math.round(player.x + dirX * distance);
+    const targetY = Math.round(player.y + dirY * distance);
+    const targetZ = Math.round(player.z + dirZ * distance);
+
+    const exists = blocks.find(b => b.x === targetX && b.y === targetY && b.z === targetZ);
+    if (!exists) {
+      setBlocks([...blocks, { x: targetX, y: targetY, z: targetZ, type: selectedBlock }]);
+      toast.success('Блок поставлен!');
+    }
+  };
+
+  const removeBlock = () => {
+    const distance = 3;
+    const dirX = Math.sin(player.rotY * Math.PI / 180);
+    const dirZ = -Math.cos(player.rotY * Math.PI / 180);
+    const dirY = Math.sin(player.rotX * Math.PI / 180);
+
+    const targetX = Math.round(player.x + dirX * distance);
+    const targetY = Math.round(player.y + dirY * distance);
+    const targetZ = Math.round(player.z + dirZ * distance);
+
+    setBlocks(blocks.filter(b => !(b.x === targetX && b.y === targetY && b.z === targetZ)));
     toast.info('Блок удалён!');
   };
 
-  const projectBlock = (block: Block) => {
-    const rad = rotation.y * Math.PI / 180;
-    const radX = rotation.x * Math.PI / 180;
-    
-    const rotatedX = block.x * Math.cos(rad) - block.z * Math.sin(rad);
-    const rotatedZ = block.x * Math.sin(rad) + block.z * Math.cos(rad);
-    const rotatedY = block.y * Math.cos(radX) - rotatedZ * Math.sin(radX);
-    const finalZ = block.y * Math.sin(radX) + rotatedZ * Math.cos(radX);
-    
-    const scale = 30;
-    return {
-      x: rotatedX * scale + 300,
-      y: -rotatedY * scale + 300,
-      z: finalZ,
-      size: scale
-    };
-  };
-
-  const sortedBlocks = [...blocks].sort((a, b) => {
-    const projA = projectBlock(a);
-    const projB = projectBlock(b);
-    return projA.z - projB.z;
-  });
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 p-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-6">
-          <h1 className="text-5xl font-bold text-white mb-2 drop-shadow-lg">⛏️ MineCraft Builder</h1>
-          <p className="text-white/90 text-lg">Строй свой мир из блоков!</p>
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-4">
+          <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">⛏️ Minecraft FPS</h1>
+          <p className="text-white/90">Игра от первого лица</p>
         </div>
 
         <div className="grid lg:grid-cols-4 gap-4">
           <div className="lg:col-span-3">
-            <Card className="p-6 bg-white/95 backdrop-blur shadow-2xl">
-              <div 
+            <Card className="p-4 bg-white/95 backdrop-blur shadow-2xl">
+              <canvas
                 ref={canvasRef}
-                className="relative w-full h-[600px] bg-gradient-to-b from-sky-200 to-sky-100 rounded-lg overflow-hidden cursor-move select-none"
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-              >
-                <svg className="absolute inset-0 w-full h-full">
-                  {sortedBlocks.map((block, idx) => {
-                    const proj = projectBlock(block);
-                    const lightness = 0.8 + (proj.z / 200) * 0.2;
-                    
-                    return (
-                      <g key={idx}>
-                        <rect
-                          x={proj.x}
-                          y={proj.y}
-                          width={proj.size}
-                          height={proj.size}
-                          fill={blockColors[block.type]}
-                          stroke="#000"
-                          strokeWidth="2"
-                          opacity={lightness}
-                          className="cursor-pointer hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (e.shiftKey) {
-                              removeBlock(block.x, block.y, block.z);
-                            } else {
-                              addBlock(block.x, block.y + 1, block.z);
-                            }
-                          }}
-                        />
-                        <rect
-                          x={proj.x + 4}
-                          y={proj.y + 4}
-                          width={proj.size - 8}
-                          height={proj.size - 8}
-                          fill={blockColors[block.type]}
-                          opacity={Math.min(1, lightness + 0.2)}
-                          pointerEvents="none"
-                        />
-                      </g>
-                    );
-                  })}
-                </svg>
-                
-                <div className="absolute bottom-4 left-4 bg-black/60 text-white px-4 py-2 rounded-lg backdrop-blur text-sm">
-                  <p>🖱️ Левый клик - добавить блок</p>
-                  <p>⇧ + Клик - удалить блок</p>
-                  <p>🎮 Зажми и тяни - поворот камеры</p>
+                width={1000}
+                height={600}
+                className="w-full h-[600px] bg-black rounded-lg cursor-pointer"
+                onClick={handleCanvasClick}
+              />
+              
+              {!isPointerLocked && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-black/80 text-white px-6 py-4 rounded-lg text-center">
+                    <p className="text-xl font-bold mb-2">🖱️ Кликни для игры</p>
+                    <p className="text-sm">ESC - выйти из управления</p>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <Card className="mt-4 p-4 bg-white/95 backdrop-blur">
+              <div className="flex flex-wrap gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2 py-1 bg-gray-200 rounded">W A S D</kbd>
+                  <span>Движение</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2 py-1 bg-gray-200 rounded">Мышь</kbd>
+                  <span>Обзор</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2 py-1 bg-gray-200 rounded">ЛКМ</kbd>
+                  <Button size="sm" onClick={removeBlock}>Удалить блок</Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2 py-1 bg-gray-200 rounded">ПКМ</kbd>
+                  <Button size="sm" onClick={placeBlock}>Поставить блок</Button>
                 </div>
               </div>
             </Card>
           </div>
 
           <div className="space-y-4">
-            <Card className="p-6 bg-white/95 backdrop-blur shadow-2xl">
-              <h3 className="font-bold text-xl mb-4 flex items-center gap-2">
-                <Icon name="Package" size={24} className="text-purple-600" />
+            <Card className="p-4 bg-white/95 backdrop-blur shadow-2xl">
+              <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                <Icon name="Package" size={20} className="text-purple-600" />
                 Блоки
               </h3>
               
@@ -186,7 +325,8 @@ export default function Index() {
                   <Button
                     key={type}
                     variant={selectedBlock === type ? 'default' : 'outline'}
-                    className="w-full justify-start text-lg h-14"
+                    className="w-full justify-start h-12"
+                    size="sm"
                     onClick={() => {
                       setSelectedBlock(type);
                       toast.success(`Выбран ${blockEmojis[type]}`);
@@ -197,48 +337,38 @@ export default function Index() {
                       borderWidth: '2px'
                     }}
                   >
-                    <span className="text-2xl mr-2">{blockEmojis[type]}</span>
+                    <span className="text-xl mr-2">{blockEmojis[type]}</span>
                     <span className={selectedBlock === type ? 'text-white font-bold' : ''}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                      {type}
                     </span>
                   </Button>
                 ))}
               </div>
             </Card>
 
-            <Card className="p-6 bg-white/95 backdrop-blur shadow-2xl">
-              <h3 className="font-bold text-xl mb-4 flex items-center gap-2">
-                <Icon name="Info" size={24} className="text-blue-600" />
-                Статистика
+            <Card className="p-4 bg-white/95 backdrop-blur shadow-2xl">
+              <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                <Icon name="MapPin" size={20} className="text-blue-600" />
+                Позиция
               </h3>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Всего блоков:</span>
-                  <span className="font-bold text-lg">{blocks.length}</span>
+                  <span className="text-gray-600">X:</span>
+                  <span className="font-mono">{player.x.toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Выбран:</span>
-                  <span className="font-bold">{blockEmojis[selectedBlock]} {selectedBlock}</span>
+                  <span className="text-gray-600">Y:</span>
+                  <span className="font-mono">{player.y.toFixed(1)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Z:</span>
+                  <span className="font-mono">{player.z.toFixed(1)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Поворот:</span>
+                  <span className="font-mono">{player.rotY.toFixed(0)}°</span>
                 </div>
               </div>
-              
-              <Button 
-                variant="destructive" 
-                className="w-full mt-4"
-                onClick={() => {
-                  const initialBlocks: Block[] = [];
-                  for (let x = -3; x <= 3; x++) {
-                    for (let z = -3; z <= 3; z++) {
-                      initialBlocks.push({ x, y: 0, z, type: 'grass' });
-                    }
-                  }
-                  setBlocks(initialBlocks);
-                  toast.info('Мир сброшен!');
-                }}
-              >
-                <Icon name="RotateCcw" size={18} className="mr-2" />
-                Сбросить мир
-              </Button>
             </Card>
           </div>
         </div>
